@@ -1,122 +1,71 @@
-# How I rapidly create apps as a DA in 2024
+# How to create an email sender using Amplify and Amazon SES
+
+## Project Forethoughts
+
+I know that for this project, I'll need to create an api for the events, and a lambda function that my API calls to send emails. That's it.
+
+My assumption is that I can use SES's `sendBulkEmail` API to do this. My understanding is that any emails I send need to go to verified email addresses since I'm in the SES sandbox.
 
 ## Application Setup
 
 ### Configure the frontend
 
-1. Vite: `npm create vite`
-1. Install React Router: `npm i react-router-dom`
-1. Install Tailwind DaisyUI:
+After updating the deps, I cloned my [gen2 starter repo](https://github.com/mtliendo/amplify-gen2-vite-starter). This comes with gen2, react router, a protected route, and public routes already configured in addition to DaisyUI for styling.
 
-```sh
-npm install -D tailwindcss postcss autoprefixer daisyui
-npx tailwindcss init -p
-```
-
-```ts
-//tailwind.config.ts
-import daisyui from 'daisyui'
-/** @type {import('tailwindcss').Config} */
-export default {
-	content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
-	theme: {
-		extend: {},
-	},
-	plugins: [daisyui],
-}
-```
-
-```css
-/* index.css */
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-```
+> 🗒️ I'm looking to update this to ShadCN and use React Query in the future.
 
 ### Configure the backend
 
-1. Scaffold Amplify: `npm create amplify`
-1. Install UI lib to interact with backend: `npm i @aws-amplify/ui-react`
+This repo already comes with the backend initialized with
 
-## Application Configuration
-
-Every app I create has a landing page that I use to display information about the project I'm building. At a minimum, this includes a [navbar](https://daisyui.com/components/navbar/), [hero](https://daisyui.com/components/hero/), and [footer](https://daisyui.com/components/footer/). The components live in a `components` directory.
-
-### Routing
-
-I always have at least a public landing page (the homepage), and a page that require Authentication. Though the app should be flexible enough to account for more/nested pages.
-
-I update the navbar to contain routing links.
-
-#### HomePage
-
-Every page will have a navbar and footer so I can keep the Home page simple:
-
-```tsx
-import Hero from '../components/Hero'
-
-const HomePage = () => {
-	return <Hero />
-}
-
-export default HomePage
+```sh
+npm create amplify@latest
 ```
 
-#### Other Pages
+## Project Creation
 
-```tsx
-//the signin page
+It doesn't take much effort, but I end up with the following data model:
+
+```ts
+import { type ClientSchema, a, defineData } from '@aws-amplify/backend'
+
+const schema = a.schema({
+	Event: a
+		.model({
+			name: a.string().required(),
+			description: a.string().required(),
+			recipients: a.email().array().required(),
+		})
+		.authorization((allow) => [allow.owner()]),
+})
+
+export type Schema = ClientSchema<typeof schema>
+
+export const data = defineData({
+	name: 'EventManagement',
+	schema,
+	authorizationModes: {
+		defaultAuthorizationMode: 'userPool',
+	},
+})
 ```
 
-```tsx
-//the signup page
-```
+This will deploy Cognito and my API.
 
-#### Protected Page
+🚨 It failed.
 
-```tsx
-const Protected = () => {
-	return <div>Protected</div>
-}
+Took a minute or two of troubleshooting, but I noticed the stack name is based on what's in my `package.json`. In this case, the stack already existed and my new resources weren't allowed to override it.
 
-export default Protected
-```
+Long story short, between projects, I need to make sure I'm updating the name in my package.json.
 
-### Create Layouts
+## Sending email
 
-Here I will have one root layout that has my navbar and footer. I will also have another that is nested in the general layout. This one manages auth and simply returns the item if authenticated or redirects to a signup page.
+aws sesv2 create-email-template \
+ --template-name EventNotifier \
+ --template-content '{
+"Subject": "Exciting News!",
+"Text": "Hello {{email-address}}!",
+"Html": "<html><body><h1>Hello {{email-address}}!</h1></body></html>"
+}'
 
-#### Root Layout
-
-```tsx
-import { Outlet } from 'react-router-dom'
-import Navbar from '../components/Navbar'
-import Footer from '../components/Footer'
-
-export default function RootLayout() {
-	return (
-		<>
-			<header className="header">
-				<Navbar />
-			</header>
-			<main>
-				<Outlet />
-			</main>
-			<Footer />
-		</>
-	)
-}
-```
-
-#### Protected Layout
-
-```tsx
-//protected
-```
-
-### Setup React Router Dom
-
-```tsx
-//app.css is deleted
-// app.tsx
-```
+arn: arn:aws:ses:us-east-1:842537737558:template/EventNotifier
